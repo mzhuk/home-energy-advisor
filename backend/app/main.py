@@ -1,12 +1,16 @@
+from asgi_correlation_id import CorrelationIdMiddleware
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
+from app.core.errors import register_error_handlers
+from app.core.logging import configure_logging, register_request_logging
 from app.core.settings import Settings, get_settings
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     resolved_settings: Settings = settings or get_settings()
+    configure_logging()
     app = FastAPI(
         title="Home Energy Advisor API",
         version="0.1.0",
@@ -15,6 +19,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url="/openapi.json",
     )
 
+    app.add_middleware(middleware_class=CorrelationIdMiddleware)
     app.add_middleware(
         middleware_class=CORSMiddleware,
         allow_origins=resolved_settings.cors_origins,
@@ -24,9 +29,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     app.state.settings = resolved_settings
+    register_error_handlers(app)
+    register_request_logging(app)
     app.include_router(router=api_router, prefix=resolved_settings.api_prefix)
     return app
 
 
 app: FastAPI = create_app()
-
