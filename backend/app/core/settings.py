@@ -31,7 +31,7 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-4-5-haiku-latest"
-    
+
     llm_timeout_seconds: int = 30
     llm_max_retries: int = 1
     llm_temperature: float = 0.2
