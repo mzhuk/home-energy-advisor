@@ -74,7 +74,7 @@ def test_generate_advice_persists_deterministic_fallback_contract(tmp_path: Path
     assert body["id"].startswith("advice_")
     assert body["home_id"] == home["id"]
     assert body["provider"] == "fake"
-    assert body["used_fallback"] is True
+    assert body["used_fallback"] is False
     assert body["summary"]
     assert body["disclaimer"]
     assert [area["area_id"] for area in body["areas"]] == [
@@ -85,6 +85,7 @@ def test_generate_advice_persists_deterministic_fallback_contract(tmp_path: Path
         "ev_charging",
     ]
     assert body["areas"][2]["priority"] == "high"
+    assert "Demo note" in body["disclaimer"]
     assert body["created_at"]
 
 

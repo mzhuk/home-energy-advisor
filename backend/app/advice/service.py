@@ -4,12 +4,14 @@ from app.advice.deterministic import build_deterministic_advice
 from app.advice.models import AdviceRecord, AdviceResponse
 from app.advice.repository import get_latest_advice as get_latest_advice_record
 from app.advice.repository import save_advice
-from app.core.errors import AdviceNotFoundError, NotFoundError
+from app.core.errors import AdviceNotFoundError, LLMBadResponseError, NotFoundError
 from app.core.settings import Settings
 from app.db.connection import connect
 from app.db.ids import new_id
 from app.homes.repository import get_home as get_home_record
 from app.homes.schemas import HomeProfile
+from app.llm.client import LLMMessage
+from app.llm.provider import create_llm_client
 
 
 def _home_profile_from_record(record: dict[str, Any]) -> HomeProfile:
@@ -58,24 +60,46 @@ def generate_advice(settings: Settings, home_id: str) -> AdviceRecord:
         if home_record is None:
             raise NotFoundError("Home profile was not found.")
 
+        home = _home_profile_from_record(home_record)
+        ai_context = [str(item) for item in home_record["ai_context"]]
         deterministic = build_deterministic_advice(
-            _home_profile_from_record(home_record),
-            ai_context=[str(item) for item in home_record["ai_context"]],
+            home,
+            ai_context=ai_context,
         )
+        final_advice = _generate_with_fake_provider(settings, deterministic)
+        used_fallback = settings.llm_provider != "fake"
+
         saved = save_advice(
             connection,
-            _persisted_fallback_advice(
+            _persisted_advice(
                 home_id=home_id,
                 provider=settings.llm_provider,
-                advice=deterministic,
+                advice=final_advice,
+                used_fallback=used_fallback,
             ),
         )
 
     return _advice_record_from_dict(saved)
 
 
-def _persisted_fallback_advice(
-    *, home_id: str, provider: str, advice: AdviceResponse
+def _generate_with_fake_provider(
+    settings: Settings, deterministic: AdviceResponse
+) -> AdviceResponse:
+    if settings.llm_provider != "fake":
+        return deterministic
+
+    raw_advice = create_llm_client(settings).generate_advice(
+        messages=[LLMMessage(role="user", content=deterministic.model_dump_json())],
+        response_schema=AdviceResponse.model_json_schema(),
+    )
+    try:
+        return AdviceResponse.model_validate_json(raw_advice)
+    except ValueError as exc:
+        raise LLMBadResponseError() from exc
+
+
+def _persisted_advice(
+    *, home_id: str, provider: str, advice: AdviceResponse, used_fallback: bool
 ) -> dict[str, Any]:
     return {
         "id": new_id("advice"),
@@ -84,6 +108,5 @@ def _persisted_fallback_advice(
         "areas": [area.model_dump(mode="json") for area in advice.areas],
         "disclaimer": advice.disclaimer,
         "provider": provider,
-        "used_fallback": True,
+        "used_fallback": used_fallback,
     }
-
