@@ -64,3 +64,10 @@ class AdviceResponse(BaseModel):
     areas: list[AreaAdvice]
     disclaimer: str
 
+
+class AdviceRecord(AdviceResponse):
+    id: str
+    home_id: str
+    provider: str
+    used_fallback: bool
+    created_at: str
