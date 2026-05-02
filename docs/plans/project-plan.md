@@ -239,10 +239,10 @@ LLM_API_BASE=http://localhost:1234/v1
 LLM_API_KEY=not-needed-for-local
 
 OPENAI_API_KEY=
-OPENAI_MODEL=gpt-4.1-mini
+OPENAI_MODEL=gpt-5-mini
 
 ANTHROPIC_API_KEY=
-ANTHROPIC_MODEL=claude-3-5-haiku-latest
+ANTHROPIC_MODEL=claude-4-5-haiku-latest
 
 LLM_TIMEOUT_SECONDS=30
 LLM_MAX_RETRIES=1
