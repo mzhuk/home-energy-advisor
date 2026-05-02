@@ -4,14 +4,16 @@ from app.advice.deterministic import build_deterministic_advice
 from app.advice.models import AdviceRecord, AdviceResponse
 from app.advice.repository import get_latest_advice as get_latest_advice_record
 from app.advice.repository import save_advice
-from app.core.errors import AdviceNotFoundError, LLMBadResponseError, NotFoundError
+from app.core.errors import AdviceNotFoundError, AppError, LLMBadResponseError, NotFoundError
 from app.core.settings import Settings
 from app.db.connection import connect
 from app.db.ids import new_id
+from app.guardrails.pipeline import GuardrailPipeline
 from app.homes.repository import get_home as get_home_record
 from app.homes.schemas import HomeProfile
-from app.llm.client import LLMMessage
+from app.llm.prompts import PromptBuilder
 from app.llm.provider import create_llm_client
+from app.llm.response_validator import ResponseValidator
 
 
 def _home_profile_from_record(record: dict[str, Any]) -> HomeProfile:
@@ -66,8 +68,13 @@ def generate_advice(settings: Settings, home_id: str) -> AdviceRecord:
             home,
             ai_context=ai_context,
         )
-        final_advice = _generate_with_fake_provider(settings, deterministic)
-        used_fallback = settings.llm_provider != "fake"
+        final_advice, used_fallback = _generate_with_provider(
+            settings=settings,
+            home=home,
+            ai_context=ai_context,
+            deterministic=deterministic,
+            fallback_audit=GuardrailPipeline(connection=connection),
+        )
 
         saved = save_advice(
             connection,
@@ -82,20 +89,72 @@ def generate_advice(settings: Settings, home_id: str) -> AdviceRecord:
     return _advice_record_from_dict(saved)
 
 
-def _generate_with_fake_provider(
-    settings: Settings, deterministic: AdviceResponse
-) -> AdviceResponse:
-    if settings.llm_provider != "fake":
-        return deterministic
-
-    raw_advice = create_llm_client(settings).generate_advice(
-        messages=[LLMMessage(role="user", content=deterministic.model_dump_json())],
-        response_schema=AdviceResponse.model_json_schema(),
+def _generate_with_provider(
+    *,
+    settings: Settings,
+    home: HomeProfile,
+    ai_context: list[str],
+    deterministic: AdviceResponse,
+    fallback_audit: GuardrailPipeline,
+) -> tuple[AdviceResponse, bool]:
+    prompt_builder = PromptBuilder()
+    validator = ResponseValidator()
+    messages = prompt_builder.build_advice_messages(
+        home=home,
+        ai_context=ai_context,
+        deterministic_advice=deterministic,
     )
+    client = create_llm_client(settings)
+    raw_advice = ""
     try:
-        return AdviceResponse.model_validate_json(raw_advice)
-    except ValueError as exc:
-        raise LLMBadResponseError() from exc
+        raw_advice = client.generate_advice(
+            messages=messages,
+            response_schema=AdviceResponse.model_json_schema(),
+        )
+        return validator.validate_advice(raw_advice, home=home), False
+    except LLMBadResponseError as first_error:
+        try:
+            repair_messages = prompt_builder.build_advice_repair_messages(
+                original_messages=messages,
+                invalid_response=raw_advice,
+                validation_error=first_error.message,
+            )
+            repaired = client.generate_advice(
+                messages=repair_messages,
+                response_schema=AdviceResponse.model_json_schema(),
+            )
+            return validator.validate_advice(repaired, home=home), False
+        except (AppError, ValueError) as exc:
+            _record_advice_fallback(
+                fallback_audit,
+                home,
+                reason=f"validation_failed:{type(exc).__name__}",
+                original_text=raw_advice,
+            )
+            return deterministic, True
+    except AppError as exc:
+        _record_advice_fallback(
+            fallback_audit,
+            home,
+            reason=f"provider_error:{exc.code}",
+            original_text=None,
+        )
+        return deterministic, True
+
+
+def _record_advice_fallback(
+    fallback_audit: GuardrailPipeline,
+    home: HomeProfile,
+    *,
+    reason: str,
+    original_text: str | None,
+) -> None:
+    fallback_audit.record_fallback_used(
+        home,
+        "global",
+        reason=reason,
+        original_text=original_text,
+    )
 
 
 def _persisted_advice(

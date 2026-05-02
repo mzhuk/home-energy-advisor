@@ -16,7 +16,7 @@ class FakeLLMClient:
     ) -> str:
         if messages:
             try:
-                advice = AdviceResponse.model_validate_json(messages[-1].content)
+                advice = _advice_from_message(messages[-1])
             except ValueError:
                 advice = _default_advice()
         else:
@@ -111,6 +111,17 @@ def _default_advice() -> AdviceResponse:
             "roofing, HVAC, or code compliance assessment."
         ),
     )
+
+
+def _advice_from_message(message: LLMMessage) -> AdviceResponse:
+    try:
+        payload = json.loads(message.content)
+    except json.JSONDecodeError:
+        return AdviceResponse.model_validate_json(message.content)
+
+    if isinstance(payload, dict) and "deterministic_draft" in payload:
+        return AdviceResponse.model_validate(payload["deterministic_draft"])
+    return AdviceResponse.model_validate(payload)
 
 
 _CHAT_RESPONSES: dict[ChatSource, str] = {
