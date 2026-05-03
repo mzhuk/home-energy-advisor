@@ -4,7 +4,7 @@ from app.advice.deterministic import build_deterministic_advice
 from app.advice.models import AdviceRecord, AdviceResponse
 from app.advice.repository import get_latest_advice as get_latest_advice_record
 from app.advice.repository import save_advice
-from app.core.errors import AdviceNotFoundError, AppError, LLMBadResponseError, NotFoundError
+from app.core.errors import AdviceNotFoundError, AppError, NotFoundError
 from app.core.settings import Settings
 from app.db.connection import connect
 from app.db.ids import new_id
@@ -97,47 +97,24 @@ def _generate_with_provider(
     deterministic: AdviceResponse,
     fallback_audit: GuardrailPipeline,
 ) -> tuple[AdviceResponse, bool]:
-    prompt_builder = PromptBuilder()
-    validator = ResponseValidator()
-    messages = prompt_builder.build_advice_messages(
+    messages = PromptBuilder().build_advice_messages(
         home=home,
         ai_context=ai_context,
         deterministic_advice=deterministic,
     )
     client = create_llm_client(settings)
-    raw_advice = ""
     try:
         raw_advice = client.generate_advice(
             messages=messages,
             response_schema=AdviceResponse.model_json_schema(),
         )
-        return validator.validate_advice(raw_advice, home=home), False
-    except LLMBadResponseError as first_error:
-        try:
-            repair_messages = prompt_builder.build_advice_repair_messages(
-                original_messages=messages,
-                invalid_response=raw_advice,
-                validation_error=first_error.message,
-            )
-            repaired = client.generate_advice(
-                messages=repair_messages,
-                response_schema=AdviceResponse.model_json_schema(),
-            )
-            return validator.validate_advice(repaired, home=home), False
-        except (AppError, ValueError) as exc:
-            _record_advice_fallback(
-                fallback_audit,
-                home,
-                reason=f"validation_failed:{type(exc).__name__}",
-                original_text=raw_advice,
-            )
-            return deterministic, True
+        return ResponseValidator().validate_advice(raw_advice, home=home), False
     except AppError as exc:
         _record_advice_fallback(
             fallback_audit,
             home,
-            reason=f"provider_error:{exc.code}",
-            original_text=None,
+            reason=f"advice_generation_failed:{exc.code}",
+            original_text=raw_advice if "raw_advice" in locals() else None,
         )
         return deterministic, True
 

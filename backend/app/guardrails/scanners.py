@@ -18,24 +18,65 @@ OFF_TOPIC_PATTERNS = (
 )
 
 HOME_ENERGY_TERMS = (
-    "solar",
-    "panel",
+    "air sealing",
+    "appliance",
+    "attic",
+    "backup",
     "battery",
-    "storage",
+    "bill",
+    "boiler",
+    "carbon",
+    "charger",
+    "charging",
+    "comfort",
+    "consumption",
+    "cooling",
+    "demand",
+    "door",
+    "efficiency",
+    "efficient",
+    "electric",
+    "electrification",
+    "emissions",
+    "energy",
+    "ev",
+    "furnace",
+    "garage",
+    "grid",
     "heat pump",
     "heating",
-    "thermostat",
-    "smart",
-    "monitor",
-    "energy",
-    "electric",
-    "ev",
-    "charging",
-    "charger",
-    "roof",
     "home",
-    "power",
+    "hot water",
+    "hvac",
     "insulation",
+    "inverter",
+    "led",
+    "lighting",
+    "load",
+    "meter",
+    "microinverter",
+    "monitor",
+    "outage",
+    "panel",
+    "power",
+    "radiator",
+    "renewable",
+    "retrofit",
+    "roof",
+    "schedule",
+    "smart",
+    "solar",
+    "storage",
+    "tariff",
+    "temperature",
+    "thermostat",
+    "time-of-use",
+    "usage",
+    "utility",
+    "ventilation",
+    "water heater",
+    "weatherization",
+    "window",
     "wiring",
 )
 
@@ -44,25 +85,6 @@ PROMPT_LEAK_PATTERNS = (
     re.compile(r"\bhidden developer message\b", re.IGNORECASE),
     re.compile(r"\bconfidential instructions\b", re.IGNORECASE),
 )
-
-UNSAFE_INSTALLATION_PATTERNS = (
-    re.compile(r"\b(?:open|remove)\s+(?:the\s+)?(?:breaker|electrical panel)\b", re.IGNORECASE),
-    re.compile(
-        r"\bwire\s+(?:the\s+)?(?:inverter|charger|battery|panel)\s+yourself\b",
-        re.IGNORECASE,
-    ),
-    re.compile(r"\broof installation step[- ]by[- ]step\b", re.IGNORECASE),
-    re.compile(r"\bhandle refrigerant\b", re.IGNORECASE),
-)
-
-EXACT_ROI_PATTERNS = (
-    re.compile(r"\bpayback (?:period )?(?:is|will be)\s+\d+(?:\.\d+)?\s+years?\b", re.IGNORECASE),
-    re.compile(
-        r"\bsave\s+\$?\d+(?:,\d{3})*(?:\.\d+)?\s+(?:per|a)\s+(?:month|year)\b",
-        re.IGNORECASE,
-    ),
-)
-
 
 class ScannerSuite:
     def scan_input(self, message: str) -> list[RiskSignal]:
@@ -76,7 +98,7 @@ class ScannerSuite:
                 RiskSignal(
                     scanner="topic_relevance",
                     reason="Message does not appear related to home energy advice.",
-                    severity=GuardrailSeverity.BLOCKED,
+                    severity=GuardrailSeverity.WARNING,
                 )
             )
         return signals
@@ -84,10 +106,6 @@ class ScannerSuite:
     def scan_output(self, text: str) -> list[RiskSignal]:
         signals: list[RiskSignal] = []
         signals.extend(_signals_for_patterns("prompt_leakage", text, PROMPT_LEAK_PATTERNS))
-        signals.extend(
-            _signals_for_patterns("unsafe_installation", text, UNSAFE_INSTALLATION_PATTERNS)
-        )
-        signals.extend(_signals_for_patterns("exact_roi_claim", text, EXACT_ROI_PATTERNS))
         signals.extend(_signals_for_patterns("ban_topics", text, OFF_TOPIC_PATTERNS))
         return signals
 

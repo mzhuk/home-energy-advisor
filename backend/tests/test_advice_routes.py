@@ -159,28 +159,23 @@ def test_local_provider_advice_success_uses_model_response(
     assert "Return valid JSON only" in stub.calls[0][1].content
 
 
-def test_local_provider_advice_repairs_invalid_first_response(
+def test_local_provider_advice_falls_back_after_invalid_model_response(
     client_factory: Callable[..., TestClient],
     create_home_api: Callable[..., dict[str, object]],
-    home_profile_from_response_factory: Callable[[dict[str, object]], HomeProfile],
     mocker: MockerFixture,
 ) -> None:
     with client_factory(name="advice.db", llm_provider="local") as client:
         home = create_home_api(client)
-        advice_json = build_deterministic_advice(
-            home_profile_from_response_factory(home),
-            ai_context=["context"],
-        ).model_dump_json()
-        stub = StubLLMClient(["not json", advice_json])
+        stub = StubLLMClient(["not json"])
         mocker.patch("app.advice.service.create_llm_client", return_value=stub)
 
         response: Response = client.post(f"/api/v1/homes/{home['id']}/advice")
 
     assert response.status_code == 201
     body = response.json()
-    assert body["used_fallback"] is False
-    assert len(stub.calls) == 2
-    assert "Repair the previous response" in stub.calls[1][-1].content
+    assert body["used_fallback"] is True
+    assert body["summary"].startswith("Start with heat pump readiness")
+    assert len(stub.calls) == 1
 
 
 def test_local_provider_advice_falls_back_after_provider_error(

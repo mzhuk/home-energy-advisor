@@ -147,22 +147,58 @@ def test_off_topic_input_is_blocked_before_provider_use(tmp_path: Path) -> None:
     assert events[0]["details"]["signals"][0]["scanner"] == "ban_topics"
 
 
-def test_ev_source_is_blocked_for_non_ev_profile(tmp_path: Path) -> None:
+def test_topic_relevance_warning_is_audited_without_blocking(tmp_path: Path) -> None:
+    database_url = sqlite_url(tmp_path / "guardrails.db")
+    init_schema(database_url)
+    home = persist_home(database_url)
+
+    with connect(database_url) as connection:
+        result = GuardrailPipeline(connection=connection).run_input_hooks(
+            home,
+            "global",
+            "Can you help compare project timelines for next quarter?",
+        )
+        events = list_audit_events(connection, home.id)
+
+    assert result.original_message == "Can you help compare project timelines for next quarter?"
+    assert events[0]["event_type"] == "off_topic_warning"
+    assert events[0]["severity"] == "warning"
+    assert events[0]["details"]["signals"][0]["scanner"] == "topic_relevance"
+
+
+def test_broader_home_energy_terms_do_not_trigger_topic_warning(tmp_path: Path) -> None:
+    database_url = sqlite_url(tmp_path / "guardrails.db")
+    init_schema(database_url)
+    home = persist_home(database_url)
+
+    with connect(database_url) as connection:
+        result = GuardrailPipeline(connection=connection).run_input_hooks(
+            home,
+            "global",
+            "Can utility tariff changes reduce my hot water and appliance usage bill?",
+        )
+        events = list_audit_events(connection, home.id)
+
+    assert result.source == "global"
+    assert events == []
+
+
+def test_ev_source_is_allowed_for_non_ev_profile(tmp_path: Path) -> None:
     database_url = sqlite_url(tmp_path / "guardrails.db")
     init_schema(database_url)
     home = persist_home(database_url, has_ev=False)
 
     with connect(database_url) as connection:
-        with pytest.raises(OffTopicBlockedError):
-            GuardrailPipeline(connection=connection).run_input_hooks(
-                home,
-                "ev_charging",
-                "How should I schedule EV charging with solar?",
-            )
+        result = GuardrailPipeline(connection=connection).run_input_hooks(
+            home,
+            "ev_charging",
+            "How should I schedule EV charging with solar?",
+        )
         events = list_audit_events(connection, home.id)
 
-    assert events[0]["event_type"] == "off_topic_blocked"
-    assert events[0]["details"]["reason"] == "ev_source_without_ev"
+    assert result.source == "ev_charging"
+    assert result.scrubbed_message == "How should I schedule EV charging with solar?"
+    assert events == []
 
 
 def test_output_hooks_block_prompt_leakage_and_audit(tmp_path: Path) -> None:
@@ -183,23 +219,23 @@ def test_output_hooks_block_prompt_leakage_and_audit(tmp_path: Path) -> None:
     assert events[0]["details"]["signals"][0]["scanner"] == "prompt_leakage"
 
 
-def test_output_hooks_block_unsafe_installation_and_exact_roi_claims() -> None:
+def test_output_hooks_allow_installation_and_roi_text_after_scanner_simplification() -> None:
     pipeline = GuardrailPipeline()
     home = home_profile()
 
-    with pytest.raises(OffTopicBlockedError):
-        pipeline.run_output_hooks(
-            home,
-            "battery",
-            "Open the electrical panel and wire the inverter yourself.",
-        )
+    installation_text = pipeline.run_output_hooks(
+        home,
+        "battery",
+        "Open the electrical panel and wire the inverter yourself.",
+    )
+    roi_text = pipeline.run_output_hooks(
+        home,
+        "solar",
+        "The payback period is 5 years and you will save $500 per year.",
+    )
 
-    with pytest.raises(OffTopicBlockedError):
-        pipeline.run_output_hooks(
-            home,
-            "solar",
-            "The payback period is 5 years and you will save $500 per year.",
-        )
+    assert installation_text == "Open the electrical panel and wire the inverter yourself."
+    assert roi_text == "The payback period is 5 years and you will save $500 per year."
 
 
 def test_output_hooks_allow_in_scope_advice() -> None:

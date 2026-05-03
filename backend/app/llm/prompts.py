@@ -67,30 +67,6 @@ class PromptBuilder:
             LLMMessage(role="user", content=_json_block(payload)),
         ]
 
-    def build_advice_repair_messages(
-        self,
-        *,
-        original_messages: Sequence[LLMMessage],
-        invalid_response: str,
-        validation_error: str,
-    ) -> list[LLMMessage]:
-        repair_payload = {
-            "task": "Repair the previous response into valid advice JSON.",
-            "validation_error": validation_error,
-            "invalid_response_excerpt": invalid_response[:2000],
-            "json_schema": AdviceResponse.model_json_schema(),
-            "requirements": [
-                ADVICE_JSON_ONLY,
-                "Do not add markdown.",
-                "Do not include categories outside the schema.",
-            ],
-        }
-        return [
-            *original_messages,
-            LLMMessage(role="assistant", content=invalid_response[:4000]),
-            LLMMessage(role="user", content=_json_block(repair_payload)),
-        ]
-
     def build_chat_messages(
         self,
         *,

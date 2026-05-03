@@ -12,6 +12,7 @@ class GuardrailSeverity(StrEnum):
 class GuardrailEventType(StrEnum):
     PII_SCRUBBED = "pii_scrubbed"
     PROMPT_INJECTION_BLOCKED = "prompt_injection_blocked"
+    OFF_TOPIC_WARNING = "off_topic_warning"
     OFF_TOPIC_BLOCKED = "off_topic_blocked"
     POST_VALIDATION_FAILED = "post_validation_failed"
     FALLBACK_USED = "fallback_used"
@@ -41,4 +42,3 @@ class GuardrailInputResult:
     source: str
     pii_changed: bool
     pii_entity_types: list[str]
-

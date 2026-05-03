@@ -172,7 +172,7 @@ def test_prompt_injection_is_blocked_before_provider_and_not_stored(
     assert history == []
 
 
-def test_ev_source_is_blocked_for_non_ev_home(
+def test_ev_source_is_allowed_for_non_ev_home(
     client_factory: Callable[..., TestClient],
     create_home_api: Callable[..., dict[str, object]],
 ) -> None:
@@ -182,9 +182,11 @@ def test_ev_source_is_blocked_for_non_ev_home(
             f"/api/v1/homes/{home['id']}/chat",
             json={"source": "ev_charging", "message": "How should I schedule EV charging?"},
         )
+        history = client.get(f"/api/v1/homes/{home['id']}/chat").json()
 
-    assert response.status_code == 400
-    assert response.json()["error"]["code"] == "off_topic_blocked"
+    assert response.status_code == 201
+    assert response.json()["assistant_message"]["source"] == "ev_charging"
+    assert [message["source"] for message in history] == ["ev_charging", "ev_charging"]
 
 
 def test_provider_failure_after_user_storage_does_not_store_assistant(

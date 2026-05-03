@@ -29,7 +29,7 @@ class GuardrailPipeline:
         self._scanners = scanners or ScannerSuite()
 
     def run_input_hooks(self, home: HomeProfile, source: str, message: str) -> GuardrailInputResult:
-        normalized_source = self._validate_source(home, source, message)
+        normalized_source = self._validate_source(source)
         stripped_message = message.strip()
         if not stripped_message or len(stripped_message) > MAX_MESSAGE_LENGTH:
             raise OffTopicBlockedError(
@@ -59,7 +59,7 @@ class GuardrailPipeline:
         )
 
     def run_output_hooks(self, home: HomeProfile, source: str, text: str) -> str:
-        normalized_source = self._validate_source(home, source, text)
+        normalized_source = self._validate_source(source)
         signals = self._scanners.scan_output(text)
         if not signals:
             return text
@@ -88,21 +88,9 @@ class GuardrailPipeline:
             details={"reason": reason},
         )
 
-    def _validate_source(self, home: HomeProfile, source: str, original_text: str) -> str:
+    def _validate_source(self, source: str) -> str:
         if source not in ALLOWED_SOURCES:
             raise OffTopicBlockedError("Unknown home advice source.")
-        if source == "ev_charging" and not home.has_ev:
-            self._audit(
-                home,
-                event_type=GuardrailEventType.OFF_TOPIC_BLOCKED,
-                source=source,
-                severity=GuardrailSeverity.BLOCKED,
-                original_text=original_text,
-                details={"reason": "ev_source_without_ev"},
-            )
-            raise OffTopicBlockedError(
-                "EV charging advice is only available for EV owner profiles."
-            )
         return source
 
     def _raise_for_input_signals(
@@ -111,8 +99,26 @@ class GuardrailPipeline:
         if not signals:
             return
 
+        warning_signals = [
+            signal for signal in signals if signal.severity == GuardrailSeverity.WARNING
+        ]
+        blocked_signals = [
+            signal for signal in signals if signal.severity == GuardrailSeverity.BLOCKED
+        ]
+        if not blocked_signals:
+            if warning_signals:
+                self._audit(
+                    home,
+                    event_type=GuardrailEventType.OFF_TOPIC_WARNING,
+                    source=source,
+                    severity=GuardrailSeverity.WARNING,
+                    original_text=message,
+                    details={"signals": [_signal_details(signal) for signal in warning_signals]},
+                )
+            return
+
         event_type = GuardrailEventType.OFF_TOPIC_BLOCKED
-        if any(signal.scanner == "prompt_injection" for signal in signals):
+        if any(signal.scanner == "prompt_injection" for signal in blocked_signals):
             event_type = GuardrailEventType.PROMPT_INJECTION_BLOCKED
 
         self._audit(
@@ -121,7 +127,7 @@ class GuardrailPipeline:
             source=source,
             severity=GuardrailSeverity.BLOCKED,
             original_text=message,
-            details={"signals": [_signal_details(signal) for signal in signals]},
+            details={"signals": [_signal_details(signal) for signal in blocked_signals]},
         )
         if event_type == GuardrailEventType.PROMPT_INJECTION_BLOCKED:
             raise PromptInjectionBlockedError()
