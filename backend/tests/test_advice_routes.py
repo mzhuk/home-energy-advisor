@@ -1,5 +1,4 @@
-from collections.abc import Sequence
-from pathlib import Path
+from collections.abc import Callable, Sequence
 
 from fastapi.testclient import TestClient
 from httpx import Response
@@ -7,55 +6,8 @@ from pytest_mock import MockerFixture
 
 from app.advice.deterministic import build_deterministic_advice
 from app.core.errors import LLMUnavailableError
-from app.core.settings import LLMProvider, Settings
-from app.homes.schemas import BuildPeriod, HeatingSystem, HomeProfile, HomeSize, Residents
+from app.homes.schemas import HomeProfile
 from app.llm.client import LLMMessage
-from app.main import create_app
-
-
-def sqlite_url(path: Path) -> str:
-    return f"sqlite:///{path}"
-
-
-def create_client(tmp_path: Path, *, llm_provider: LLMProvider = "fake") -> TestClient:
-    settings = Settings(
-        database_url=sqlite_url(tmp_path / "advice.db"),
-        llm_provider=llm_provider,
-    )
-    return TestClient(create_app(settings))
-
-
-def home_payload(**overrides: object) -> dict[str, object]:
-    payload: dict[str, object] = {
-        "name": "Main house",
-        "build_period": "pre_1978",
-        "home_size": "y100_200",
-        "residents": "three_four",
-        "heating_system": "gas",
-        "has_ev": True,
-    }
-    payload.update(overrides)
-    return payload
-
-
-def create_home(client: TestClient, **overrides: object) -> dict[str, object]:
-    response: Response = client.post("/api/v1/homes", json=home_payload(**overrides))
-    assert response.status_code == 201
-    return response.json()
-
-
-def home_profile_from_response(home: dict[str, object]) -> HomeProfile:
-    return HomeProfile(
-        id=str(home["id"]),
-        name=str(home["name"]),
-        build_period=BuildPeriod(str(home["build_period"])),
-        home_size=HomeSize(str(home["home_size"])),
-        residents=Residents(str(home["residents"])),
-        heating_system=HeatingSystem(str(home["heating_system"])),
-        has_ev=bool(home["has_ev"]),
-        created_at=str(home["created_at"]),
-        updated_at=str(home["updated_at"]),
-    )
 
 
 class StubLLMClient:
@@ -79,9 +31,12 @@ class StubLLMClient:
         return "ok"
 
 
-def test_get_advice_before_generation_returns_advice_not_found(tmp_path: Path) -> None:
-    with create_client(tmp_path) as client:
-        home = create_home(client)
+def test_get_advice_before_generation_returns_advice_not_found(
+    client_factory: Callable[..., TestClient],
+    create_home_api: Callable[..., dict[str, object]],
+) -> None:
+    with client_factory(name="advice.db") as client:
+        home = create_home_api(client)
 
         response: Response = client.get(f"/api/v1/homes/{home['id']}/advice")
 
@@ -91,8 +46,10 @@ def test_get_advice_before_generation_returns_advice_not_found(tmp_path: Path) -
     assert body["error"]["request_id"]
 
 
-def test_get_and_post_advice_for_missing_home_return_not_found(tmp_path: Path) -> None:
-    with create_client(tmp_path) as client:
+def test_get_and_post_advice_for_missing_home_return_not_found(
+    client_factory: Callable[..., TestClient],
+) -> None:
+    with client_factory(name="advice.db") as client:
         get_response: Response = client.get("/api/v1/homes/home_missing/advice")
         post_response: Response = client.post("/api/v1/homes/home_missing/advice")
 
@@ -102,9 +59,12 @@ def test_get_and_post_advice_for_missing_home_return_not_found(tmp_path: Path) -
     assert post_response.json()["error"]["code"] == "not_found"
 
 
-def test_generate_advice_persists_deterministic_fallback_contract(tmp_path: Path) -> None:
-    with create_client(tmp_path, llm_provider="fake") as client:
-        home = create_home(client)
+def test_generate_advice_persists_deterministic_fallback_contract(
+    client_factory: Callable[..., TestClient],
+    create_home_api: Callable[..., dict[str, object]],
+) -> None:
+    with client_factory(name="advice.db", llm_provider="fake") as client:
+        home = create_home_api(client)
 
         response: Response = client.post(f"/api/v1/homes/{home['id']}/advice")
         latest_response: Response = client.get(f"/api/v1/homes/{home['id']}/advice")
@@ -130,9 +90,12 @@ def test_generate_advice_persists_deterministic_fallback_contract(tmp_path: Path
     assert body["created_at"]
 
 
-def test_generate_advice_omits_ev_area_for_non_ev_home(tmp_path: Path) -> None:
-    with create_client(tmp_path) as client:
-        home = create_home(client, has_ev=False)
+def test_generate_advice_omits_ev_area_for_non_ev_home(
+    client_factory: Callable[..., TestClient],
+    create_home_api: Callable[..., dict[str, object]],
+) -> None:
+    with client_factory(name="advice.db") as client:
+        home = create_home_api(client, has_ev=False)
 
         response: Response = client.post(f"/api/v1/homes/{home['id']}/advice")
 
@@ -140,9 +103,12 @@ def test_generate_advice_omits_ev_area_for_non_ev_home(tmp_path: Path) -> None:
     assert "ev_charging" not in [area["area_id"] for area in response.json()["areas"]]
 
 
-def test_generate_advice_repeatedly_updates_latest_advice(tmp_path: Path) -> None:
-    with create_client(tmp_path) as client:
-        home = create_home(client)
+def test_generate_advice_repeatedly_updates_latest_advice(
+    client_factory: Callable[..., TestClient],
+    create_home_api: Callable[..., dict[str, object]],
+) -> None:
+    with client_factory(name="advice.db") as client:
+        home = create_home_api(client)
 
         first = client.post(f"/api/v1/homes/{home['id']}/advice").json()
         second = client.post(f"/api/v1/homes/{home['id']}/advice").json()
@@ -153,9 +119,12 @@ def test_generate_advice_repeatedly_updates_latest_advice(tmp_path: Path) -> Non
     assert latest["areas"] == second["areas"]
 
 
-def test_home_detail_includes_latest_advice_after_generation(tmp_path: Path) -> None:
-    with create_client(tmp_path, llm_provider="fake") as client:
-        home = create_home(client)
+def test_home_detail_includes_latest_advice_after_generation(
+    client_factory: Callable[..., TestClient],
+    create_home_api: Callable[..., dict[str, object]],
+) -> None:
+    with client_factory(name="advice.db", llm_provider="fake") as client:
+        home = create_home_api(client)
         generated = client.post(f"/api/v1/homes/{home['id']}/advice").json()
 
         response: Response = client.get(f"/api/v1/homes/{home['id']}")
@@ -166,12 +135,15 @@ def test_home_detail_includes_latest_advice_after_generation(tmp_path: Path) -> 
 
 
 def test_local_provider_advice_success_uses_model_response(
-    tmp_path: Path, mocker: MockerFixture
+    client_factory: Callable[..., TestClient],
+    create_home_api: Callable[..., dict[str, object]],
+    home_profile_from_response_factory: Callable[[dict[str, object]], HomeProfile],
+    mocker: MockerFixture,
 ) -> None:
-    with create_client(tmp_path, llm_provider="local") as client:
-        home = create_home(client)
+    with client_factory(name="advice.db", llm_provider="local") as client:
+        home = create_home_api(client)
         advice_json = build_deterministic_advice(
-            home_profile_from_response(home),
+            home_profile_from_response_factory(home),
             ai_context=["context"],
         ).model_dump_json()
         stub = StubLLMClient([advice_json])
@@ -188,12 +160,15 @@ def test_local_provider_advice_success_uses_model_response(
 
 
 def test_local_provider_advice_repairs_invalid_first_response(
-    tmp_path: Path, mocker: MockerFixture
+    client_factory: Callable[..., TestClient],
+    create_home_api: Callable[..., dict[str, object]],
+    home_profile_from_response_factory: Callable[[dict[str, object]], HomeProfile],
+    mocker: MockerFixture,
 ) -> None:
-    with create_client(tmp_path, llm_provider="local") as client:
-        home = create_home(client)
+    with client_factory(name="advice.db", llm_provider="local") as client:
+        home = create_home_api(client)
         advice_json = build_deterministic_advice(
-            home_profile_from_response(home),
+            home_profile_from_response_factory(home),
             ai_context=["context"],
         ).model_dump_json()
         stub = StubLLMClient(["not json", advice_json])
@@ -209,10 +184,12 @@ def test_local_provider_advice_repairs_invalid_first_response(
 
 
 def test_local_provider_advice_falls_back_after_provider_error(
-    tmp_path: Path, mocker: MockerFixture
+    client_factory: Callable[..., TestClient],
+    create_home_api: Callable[..., dict[str, object]],
+    mocker: MockerFixture,
 ) -> None:
-    with create_client(tmp_path, llm_provider="local") as client:
-        home = create_home(client)
+    with client_factory(name="advice.db", llm_provider="local") as client:
+        home = create_home_api(client)
         stub = StubLLMClient([LLMUnavailableError()])
         mocker.patch("app.advice.service.create_llm_client", return_value=stub)
 
