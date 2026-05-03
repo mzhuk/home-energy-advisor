@@ -23,7 +23,6 @@ class AreaAdvice(BaseModel):
     priority: Priority
     insight: str
     first_step: str
-    default_prompt: str
     suggested_questions: list[str] = Field(min_length=2, max_length=3)
 
 
@@ -42,10 +41,6 @@ class AdviceResponse(BaseModel):
                         "priority": "high",
                         "insight": "Gas heating makes electrification the biggest planning lever.",
                         "first_step": "Book a heat-load assessment before choosing equipment.",
-                        "default_prompt": (
-                            "Given my home profile, what should I check before moving from gas "
-                            "heating to a heat pump?"
-                        ),
                         "suggested_questions": [
                             "What should a heat pump readiness assessment include?",
                             "How should solar planning change if I electrify heating?",

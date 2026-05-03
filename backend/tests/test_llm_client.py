@@ -7,7 +7,12 @@ from pytest_mock import MockerFixture
 
 from app.advice.deterministic import build_deterministic_advice
 from app.advice.models import AdviceResponse
-from app.core.errors import LLMAuthError, LLMTimeoutError, LLMUnavailableError
+from app.core.errors import (
+    LLMAuthError,
+    LLMBadResponseError,
+    LLMTimeoutError,
+    LLMUnavailableError,
+)
 from app.core.settings import Settings
 from app.homes.schemas import BuildPeriod, HeatingSystem, HomeProfile, HomeSize, Residents
 from app.llm.client import LLMMessage
@@ -98,7 +103,7 @@ def test_litellm_local_provider_uses_openai_compatible_api_base(
     assert kwargs["api_base"] == "http://localhost:1234/v1"
     assert kwargs["api_key"] == "local-key"
     assert kwargs["timeout"] == 12
-    assert kwargs["num_retries"] == 2
+    assert kwargs["num_retries"] == 0
     assert kwargs["temperature"] == 0.1
     assert kwargs["messages"] == [{"role": "user", "content": "Hello"}]
 
@@ -172,6 +177,17 @@ def test_litellm_advice_calls_include_json_schema(mocker: MockerFixture) -> None
         ),
         (
             litellm.RateLimitError("rate", "openai", "model"),
+            LLMUnavailableError,
+        ),
+        (
+            Exception(
+                "The number of tokens to keep from the initial prompt is greater than "
+                "the context length."
+            ),
+            LLMBadResponseError,
+        ),
+        (
+            Exception("tenacity import failed please run `pip install tenacity`."),
             LLMUnavailableError,
         ),
     ],

@@ -46,9 +46,6 @@ def _default_advice() -> AdviceResponse:
                     "settling on panel count or inverter capacity."
                 ),
                 first_step="Prepare annual usage and roof constraints before requesting quotes.",
-                default_prompt=(
-                    "Given my home profile, what are the best improvements for my solar setup?"
-                ),
                 suggested_questions=[
                     "How should I size solar for this profile?",
                     "What roof details should I confirm first?",
@@ -63,9 +60,6 @@ def _default_advice() -> AdviceResponse:
                     "evening demand."
                 ),
                 first_step="Review hourly load data before choosing battery capacity.",
-                default_prompt=(
-                    "Given my home profile, would a home battery or power station be useful?"
-                ),
                 suggested_questions=[
                     "Should I add storage now or later?",
                     "What data proves a battery is useful?",
@@ -80,9 +74,6 @@ def _default_advice() -> AdviceResponse:
                     "needs, and solar support in mind."
                 ),
                 first_step="Schedule a professional heat-load assessment.",
-                default_prompt=(
-                    "Given my home profile, what should I improve around heat pump heating?"
-                ),
                 suggested_questions=[
                     "What should a heat pump assessment include?",
                     "How should controls support heating efficiency?",
@@ -97,9 +88,6 @@ def _default_advice() -> AdviceResponse:
                     "flexible loads."
                 ),
                 first_step="Start with one dashboard for production, load, and heating runtime.",
-                default_prompt=(
-                    "Given my home profile, how should smart controls monitor and operate my home?"
-                ),
                 suggested_questions=[
                     "Which metrics should I monitor first?",
                     "How can controls shift demand to solar hours?",

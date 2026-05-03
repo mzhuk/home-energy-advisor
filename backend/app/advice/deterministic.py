@@ -145,7 +145,6 @@ def _solar_advice(home: HomeProfile, priority: Priority) -> AreaAdvice:
         priority=priority,
         insight=insight,
         first_step=first_step,
-        default_prompt="Given my home profile, what are the best improvements for my solar setup?",
         suggested_questions=[
             "How should I think about solar sizing for this home?",
             "Should solar planning change if I add a heat pump or battery later?",
@@ -189,7 +188,6 @@ def _battery_advice(home: HomeProfile, priority: Priority) -> AreaAdvice:
         priority=priority,
         insight=insight,
         first_step=first_step,
-        default_prompt="Given my home profile, would a home battery or power station be useful?",
         suggested_questions=[
             "What signals show that battery storage is worth considering?",
             "Should I install solar first and add storage later?",
@@ -245,7 +243,6 @@ def _heat_pump_advice(home: HomeProfile, priority: Priority) -> AreaAdvice:
         priority=priority,
         insight=insight,
         first_step=first_step,
-        default_prompt="Given my home profile, what should I improve around heat pump heating?",
         suggested_questions=[
             "What should a heat pump readiness assessment include?",
             "How should smart controls support heating efficiency?",
@@ -293,9 +290,6 @@ def _smart_controls_advice(home: HomeProfile, priority: Priority) -> AreaAdvice:
         priority=priority,
         insight=insight,
         first_step=first_step,
-        default_prompt=(
-            "Given my home profile, how should smart controls monitor and operate my home?"
-        ),
         suggested_questions=[
             "Which energy metrics should I monitor first?",
             "How can controls shift demand to solar production hours?",
@@ -329,9 +323,6 @@ def _ev_charging_advice(home: HomeProfile, priority: Priority) -> AreaAdvice:
         priority=priority,
         insight=insight,
         first_step=first_step,
-        default_prompt=(
-            "Given my home profile, how should I optimize EV charging with solar and storage?"
-        ),
         suggested_questions=[
             "When should I charge to use more solar energy?",
             "Do I need load management for home EV charging?",

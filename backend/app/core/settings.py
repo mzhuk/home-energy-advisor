@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-4-5-haiku-latest"
 
     llm_timeout_seconds: int = 30
-    llm_max_retries: int = 1
+    llm_max_retries: int = 0
     llm_temperature: float = 0.2
 
     @field_validator("cors_origins", mode="before")

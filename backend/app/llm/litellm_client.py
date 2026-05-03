@@ -1,9 +1,15 @@
 from collections.abc import Sequence
+from importlib.util import find_spec
 from typing import Any
 
 import litellm
 
-from app.core.errors import LLMAuthError, LLMTimeoutError, LLMUnavailableError
+from app.core.errors import (
+    LLMAuthError,
+    LLMBadResponseError,
+    LLMTimeoutError,
+    LLMUnavailableError,
+)
 from app.core.settings import LLMProvider, Settings
 from app.llm.client import ChatSource, LLMMessage
 
@@ -44,7 +50,20 @@ class LiteLLMClient:
             raise LLMAuthError() from exc
         except litellm.Timeout as exc:
             raise LLMTimeoutError() from exc
+        except litellm.BadRequestError as exc:
+            raise LLMBadResponseError(_provider_error_message(exc)) from exc
         except (litellm.RateLimitError, litellm.APIConnectionError, litellm.APIError) as exc:
+            raise LLMUnavailableError() from exc
+        except Exception as exc:
+            message = _provider_error_message(exc)
+            if "context length" in message.lower() or "token" in message.lower():
+                raise LLMBadResponseError(
+                    "The current conversation is too long for the configured local model."
+                ) from exc
+            if "tenacity import failed" in message.lower():
+                raise LLMUnavailableError(
+                    "The configured model provider retry layer is unavailable."
+                ) from exc
             raise LLMUnavailableError() from exc
 
         content = _extract_content(response)
@@ -64,7 +83,7 @@ class LiteLLMClient:
             "messages": [message.to_provider_dict() for message in messages],
             "api_key": api_key,
             "timeout": self._settings.llm_timeout_seconds,
-            "num_retries": self._settings.llm_max_retries,
+            "num_retries": _available_retry_count(self._settings.llm_max_retries),
             "temperature": self._settings.llm_temperature,
         }
         if api_base:
@@ -97,3 +116,15 @@ def _extract_content(response: Any) -> str:
                 "The configured model provider returned an unknown shape."
             ) from exc
     return str(content).strip() if content is not None else ""
+
+
+def _provider_error_message(exc: Exception) -> str:
+    return str(exc)
+
+
+def _available_retry_count(configured_retries: int) -> int:
+    if configured_retries <= 0:
+        return 0
+    if find_spec("tenacity") is None:
+        return 0
+    return configured_retries

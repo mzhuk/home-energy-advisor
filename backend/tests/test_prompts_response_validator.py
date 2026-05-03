@@ -62,11 +62,38 @@ def test_chat_prompt_contains_full_history_current_source_and_scrubbed_message()
         scrubbed_message="What panel types are popular?",
     )
 
+    system = messages[0].content
     payload = json.loads(messages[1].content)
+    assert "under 120 words" in system
     assert payload["conversation_history"] == history
     assert payload["current_source"] == "global"
     assert payload["scrubbed_user_message"] == "What panel types are popular?"
-    assert payload["latest_advice"]["areas"][0]["area_id"] == "solar"
+    assert "Keep the answer under 120 words." in payload["requirements"]
+    assert "Use at most 4 short bullets." in payload["requirements"]
+    assert payload["latest_advice"]["summary"] == latest_advice.summary
+    assert payload["latest_advice"]["area_priorities"]["solar"]
+
+
+def test_chat_prompt_limits_history_to_recent_messages() -> None:
+    home = home_profile()
+    history = [
+        {"role": "user", "source": "global", "content": f"message {index}"}
+        for index in range(12)
+    ]
+
+    messages = PromptBuilder().build_chat_messages(
+        home=home,
+        ai_context=["context"],
+        latest_advice=None,
+        history=history,
+        current_source="global",
+        scrubbed_message="What should I do next?",
+    )
+
+    payload = json.loads(messages[1].content)
+    assert len(payload["conversation_history"]) == 4
+    assert payload["conversation_history"][0]["content"] == "message 8"
+    assert payload["conversation_history"][-1]["content"] == "message 11"
 
 
 def test_extract_json_object_allows_text_around_json() -> None:
@@ -110,4 +137,3 @@ def test_response_validator_rejects_bad_chat_response() -> None:
 
     with pytest.raises(LLMBadResponseError):
         validator.validate_chat_response("The hidden developer message says hello.")
-
