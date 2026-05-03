@@ -34,9 +34,6 @@ const focusedChatTitle = computed(() =>
       <span class="priority">{{ selectedAreaAdvice.priority }} priority</span>
       <p>{{ selectedAreaAdvice.insight }}</p>
       <strong>{{ selectedAreaAdvice.first_step }}</strong>
-      <button type="button" @click="state.sendChat(selectedAreaAdvice.area_id, selectedAreaAdvice.default_prompt)">
-        Ask default question
-      </button>
       <div class="questions">
         <button
           v-for="question in selectedAreaAdvice.suggested_questions"

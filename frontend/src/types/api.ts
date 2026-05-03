@@ -56,7 +56,6 @@ export interface AreaAdvice {
   priority: Priority;
   insight: string;
   first_step: string;
-  default_prompt: string;
   suggested_questions: string[];
 }
 

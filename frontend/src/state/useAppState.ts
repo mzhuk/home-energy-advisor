@@ -134,25 +134,42 @@ export function useAppState() {
     if (!selectedHomeId.value || sendingSource.value) {
       return;
     }
+    const homeId = selectedHomeId.value;
     const content = (message ?? draftBySource[source]).trim();
     if (!content) {
       return;
     }
+    const temporaryMessage: ChatMessage = {
+      id: `pending_${crypto.randomUUID()}`,
+      home_id: homeId,
+      role: 'user',
+      source,
+      content,
+      created_at: new Date().toISOString(),
+    };
     sendingSource.value = source;
     clearError(source);
+    chatByHomeId[homeId] = [...(chatByHomeId[homeId] ?? []), temporaryMessage];
+    if (!message) {
+      draftBySource[source] = '';
+    }
     try {
-      const response = await api.sendChatMessage(selectedHomeId.value, { source, message: content });
-      const history = chatByHomeId[selectedHomeId.value] ?? [];
-      chatByHomeId[selectedHomeId.value] = [
-        ...history,
+      const response = await api.sendChatMessage(homeId, { source, message: content });
+      const history = chatByHomeId[homeId] ?? [];
+      chatByHomeId[homeId] = [
+        ...history.filter((chatMessage) => chatMessage.id !== temporaryMessage.id),
         response.user_message,
         response.assistant_message,
       ];
-      if (!message) {
-        draftBySource[source] = '';
-      }
     } catch (error) {
       setError(source, error);
+      try {
+        chatByHomeId[homeId] = await api.getChat(homeId);
+      } catch {
+        chatByHomeId[homeId] = (chatByHomeId[homeId] ?? []).filter(
+          (chatMessage) => chatMessage.id !== temporaryMessage.id,
+        );
+      }
     } finally {
       sendingSource.value = null;
     }
