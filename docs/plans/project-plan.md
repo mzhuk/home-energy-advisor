@@ -37,13 +37,13 @@ Acceptance checks:
 
 Build a polished **single-resolution desktop web app** for Home Energy Advisor. Users can create multiple home profiles, switch between them, answer five guided questions, explore advice through the provided house image, and continue one unified AI conversation per home profile.
 
-Fixed target:
+Display target:
 
 ```text
-desktop viewport: 1440 x 900
+desktop viewport: full browser viewport, with 1440 x 900 minimum supported size
 house image: assents/energy-effective-house.png
 image resolution: 1536 x 1024
-display size: 1200 x 900
+display size: 900 x 600
 API prefix: /api/v1
 ```
 
@@ -372,4 +372,3 @@ cd frontend && npm run test:e2e:headed
 - LiteLLM docs: [docs.litellm.ai](https://docs.litellm.ai/)
 - LLM Guard docs: [protectai.github.io/llm-guard](https://protectai.github.io/llm-guard/)
 - Microsoft Presidio docs: [microsoft.github.io/presidio](https://microsoft.github.io/presidio/anonymizer/)
-

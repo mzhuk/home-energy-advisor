@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     )
 
     llm_provider: LLMProvider = "local"
-    llm_model: str = "local-model"
+    llm_model: str = "google/gemma-3-4b"
     llm_api_base: str = "http://localhost:1234/v1"
     llm_api_key: str = "not-needed-for-local"
 

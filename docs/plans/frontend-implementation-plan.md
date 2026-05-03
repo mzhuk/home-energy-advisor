@@ -2,13 +2,13 @@
 
 ## Frontend Constraints
 
-Build a fixed desktop layout at `1440 x 900`.
+Build a full-viewport desktop layout with `1440 x 900` as the minimum supported size.
 
 ```text
-left sidebar: profiles
-center: 1200 x 900 house image + hotspots
-right panel: selected hotspot advice + hotspot chat
-bottom panel: global chat
+left sidebar: fixed 260px profiles
+center: 900 x 600 house image + hotspots
+right panel: min 280px, grows with available screen width, full viewport height
+bottom panel: 900px wide global chat under the scene, grows with available screen height
 ```
 
 No mobile support, responsive breakpoints, drawers, or touch-first behavior are required.
@@ -19,20 +19,13 @@ No mobile support, responsive breakpoints, drawers, or touch-first behavior are 
 frontend/src/
   api/client.ts
   types/api.ts
-  stores/useHomesStore.ts
-  stores/useAdviceStore.ts
-  stores/useChatStore.ts
+  state/useAppState.ts
   components/
-    AppShell.vue
     ProfileSidebar.vue
     HomeConfigurator.vue
     HouseScene.vue
-    HouseHotspot.vue
     AdvicePanel.vue
     ChatPanel.vue
-    GlobalChatPanel.vue
-    ErrorBanner.vue
-    LoadingState.vue
 ```
 
 ## API Client
@@ -60,7 +53,7 @@ sendChatMessage
 ```text
 source: assents/energy-effective-house.png
 copy to: frontend/src/assets/energy-effective-house.png
-render size: 1200 x 900
+render size: 900 x 600
 ```
 
 Hotspots use percentage coordinates over the image:
@@ -96,17 +89,28 @@ ev_charging: charger/car area, hidden when has_ev=false
   - `npm run test:e2e:headed`
 - Add `src/types/api.ts` matching backend response/request contracts exactly, including error envelope.
 - Add `src/api/client.ts` using native `fetch`.
-- Implement lightweight stores/composables:
-  - `useHomesStore`: profiles, selected home ID, create/select/load
-  - `useAdviceStore`: latest advice, selected area, generation state
-  - `useChatStore`: shared history, drafts per source, send state per source
-- Build `AppShell.vue` with fixed 1440 x 900 frame and named regions for sidebar, scene, right panel, and bottom chat.
+- Implement one lightweight `state/useAppState.ts` composable containing:
+  - `homes`
+  - `selectedHomeId`
+  - `selectedArea`
+  - `adviceByHomeId`
+  - `chatByHomeId`
+  - `draftBySource`
+  - `sendingSource`
+  - `errorBySource`
+- Build the full-viewport app frame in `App.vue` using:
+  - `260px` sidebar
+  - `900px` scene column
+  - `minmax(280px, 1fr)` right panel that receives extra screen width
+  - `minmax(300px, 1fr)` bottom global chat region under the scene
+  - right panel spanning the full viewport height for more advice and focused chat space
 
 Acceptance checks:
 
 - TypeScript types prevent untyped API response usage.
 - No Axios dependency is added.
 - API base URL uses `VITE_API_BASE_URL`.
+- The simplified frame fills the browser viewport and remains usable at `1440 x 900`.
 
 ### 2. Profiles UI
 
@@ -140,14 +144,14 @@ Acceptance checks:
 ### 3. House And Advice UI
 
 - Copy `assents/energy-effective-house.png` to `frontend/src/assets/energy-effective-house.png` without modifying image content.
-- Render the scene at `1200 x 900`.
+- Render the scene at `900 x 600`.
 - Implement `HouseScene.vue` with image and absolutely positioned hotspot layer.
-- Implement hotspot config as data:
+- Implement hotspot config directly inside `HouseScene.vue` as data:
   - area ID
   - label
   - x/y percentages
   - optional visibility condition
-- Implement `HouseHotspot.vue` as a stable-size button with accessible label and priority state.
+- Render stable-size hotspot buttons directly inside `HouseScene.vue`.
 - Hide `ev_charging` when selected profile has `has_ev=false`.
 - Disable hotspots until profile and advice are loaded.
 - Implement `AdvicePanel.vue`:
@@ -160,19 +164,20 @@ Acceptance checks:
 
 Acceptance checks:
 
-- Hotspots align at the fixed supported viewport.
+- Hotspots align with the fixed `900 x 600` scene inside the full-viewport layout.
 - Advice panel provides useful information before chat is used.
 - EV hotspot never appears for non-EV homes.
 
 ### 4. Chat UI
 
 - Implement `ChatPanel.vue` reusable for any `source`.
-- Implement `GlobalChatPanel.vue` as `ChatPanel` configured with `source=global`.
+- Use `ChatPanel.vue` directly for both selected hotspot chat and global chat.
 - Chat panels receive shared `chatHistory` and filter visible messages by source.
-- All sends call `sendChatMessage(homeId, source, draft)` and then update the shared history from the API response or a refreshed `GET /chat`.
-- Preserve draft text per source in `useChatStore`.
+- All sends call `sendChatMessage(homeId, source, draft)` and append the returned user and assistant messages locally.
+- Refresh chat with `GET /chat` when switching profiles.
+- Preserve draft text per source in `useAppState`.
 - Disable only the source currently sending; do not block unrelated chat boxes.
-- Render user and assistant messages distinctly, with timestamps if available.
+- Render user and assistant messages distinctly. Timestamps are not required for the demo.
 - Render guardrail/provider errors inline in the panel where the user submitted the message.
 - Fake provider demo note should be visibly rendered as part of the fake response text.
 
@@ -217,13 +222,12 @@ Golden path:
 
 Required frontend checks:
 
-- Fixed `1440 x 900` layout.
+- Full-viewport desktop layout remains usable at `1440 x 900`.
 - Provided image renders.
-- Hotspots align with `1200 x 900` image.
+- Hotspots align with `900 x 600` image.
 - Multi-profile creation and switching.
 - Advice loads per profile.
 - Chat filters display by source.
 - Backend history remains unified.
 - Guardrail errors render clearly.
 - Playwright headed golden path passes.
-
