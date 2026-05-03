@@ -2,6 +2,9 @@
 
 Home Energy Advisor is a browser app that helps homeowners create multiple home profiles, generate practical energy-improvement advice, explore that advice through clickable areas on an energy-efficient house image, and continue one AI conversation per profile across solar panels, home power stations, heat pumps, smart controls, and relevant EV charging.
 
+<img width="1679" height="1000" alt="image" src="https://github.com/user-attachments/assets/71db25c4-7948-4158-89aa-8542df9d50cb" />
+
+
 ## Plans
 
 The implementation is intentionally plan-driven so another developer can trace decisions and scope changes quickly:
@@ -183,3 +186,5 @@ Reset containerized demo data:
 ```bash
 docker compose down -v
 ```
+
+Built using Codex and GPT-5.5.
