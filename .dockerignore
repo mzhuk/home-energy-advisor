@@ -1,0 +1,12 @@
+.DS_Store
+.git
+.pytest_cache
+backend/.venv
+backend/.ruff_cache
+backend/.ty
+backend/home_energy_advisor.db*
+frontend/node_modules
+frontend/dist
+frontend/.vite
+frontend/playwright-report
+frontend/test-results
